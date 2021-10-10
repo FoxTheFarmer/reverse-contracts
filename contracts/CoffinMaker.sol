@@ -262,7 +262,8 @@ contract CoffinMaker is Ownable, ReentrancyGuard {
                     }
                     rewardToken.reward_mint(address(this), reward.sub(devreward).sub(marketing_amount) );
                     // rewardToken.pool_mint(address(this), reward.sub(devreward).sub(marketing_amount) );
-                    totalMintedReward += totalMintedReward.add(reward);
+                    // totalMintedReward += totalMintedReward.add(reward);
+                    totalMintedReward = totalMintedReward.add(reward);
                 }
                 pool.lastRewardTime = block.timestamp;
                 poolInfo[_pid] = pool;
