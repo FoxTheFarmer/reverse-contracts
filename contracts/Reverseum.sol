@@ -5,16 +5,15 @@ pragma solidity ^0.8.7;
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "./interfaces/ICollateralReserve.sol";
+import "./interfaces/IReverseum.sol";
 
-contract CollateralReserve is Ownable, ICollateralReserve {
+contract Reverseum is Ownable, IReverseum {
     using SafeERC20 for IERC20;
 
     // CONTRACTS
     address public gate;
-    
-    //wftm
-    address wftm = 0x21be370D5312f44cB42ce377BC9b8a0cEF1A4C83;
+
+    address wone = 0xcF664087a5bB0237a0BAd6742852ec6c8d69A27a;
 
     /* ========== MODIFIER ========== */
 
@@ -31,11 +30,11 @@ contract CollateralReserve is Ownable, ICollateralReserve {
 
     /* ========== RESTRICTED FUNCTIONS ========== */
 
-    function transferWftmTO(
+    function transferWoneTO(
         address _receiver,
         uint256 _amount
     ) public onlyOwnerOrGate {
-        transferTo(wftm, _receiver, _amount);
+        transferTo(wone, _receiver, _amount);
     }
 
     function transferTo(

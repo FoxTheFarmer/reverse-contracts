@@ -5,12 +5,13 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import '@openzeppelin/contracts/security/Pausable.sol';
 
 import "./ReverseToken.sol";
-import "./interfaces/IReverseum.sol";
+import "./interfaces/IConsolidatedFund.sol";
 
+// CoffinMakerV2 ( MasterChef )
 
 contract CoffinMakerV2 is Ownable, Pausable, ReentrancyGuard {
     using SafeERC20 for IERC20;
@@ -66,8 +67,10 @@ contract CoffinMakerV2 is Ownable, Pausable, ReentrancyGuard {
     mapping(address=>address) public referrals;
     mapping(address=>uint) public referralsCount;
     mapping(address=>uint) public referralsLast;
+    
+    
 
-
+    // address public fund;
     // Info of each pool.
     PoolInfo[] public poolInfo;
     // Info of each user that stakes LP tokens.
@@ -133,7 +136,6 @@ contract CoffinMakerV2 is Ownable, Pausable, ReentrancyGuard {
         address _lpToken,
         uint256 _harvestInterval,
         uint256 _withdrawLockupTime,
-        uint256 _startRate,
         bool withUpdateAllPool
     ) public onlyOwner nonDuplicated(_lpToken) {
         require(startTime!=0, 'not initilized yet');
@@ -157,7 +159,7 @@ contract CoffinMakerV2 is Ownable, Pausable, ReentrancyGuard {
                 accRewardPerShare: 0,
                 harvestInterval: _harvestInterval,
                 withdrawLockupTime: _withdrawLockupTime,
-                startRate: enWei(_startRate)
+                startRate: enWei(14)
             })
         );
     }
@@ -297,12 +299,12 @@ contract CoffinMakerV2 is Ownable, Pausable, ReentrancyGuard {
         // 
         if (dev_fund!=address(0)) {
             // 12% for dev fund.
-            dev_reward = reward.div(100).mul(8);
+            dev_reward = reward.div(100).mul(12);
             rewardToken.mint(dev_fund, dev_reward);
         }
         if (marketing_fund!=address(0)) {
             // 8% for marketing fund. airdrop, listing, audit, partner reward, etc.
-            marketing_reward = reward.div(100).mul(2);
+            marketing_reward = reward.div(100).mul(8);
             rewardToken.mint(marketing_fund, marketing_reward);
         }
         // farming reward
@@ -516,10 +518,10 @@ contract CoffinMakerV2 is Ownable, Pausable, ReentrancyGuard {
     }
 
 
-    // Safe reward token transfer function,
+    // Safe rewward token transfer function, 
     // just in case if rounding error causes pool to not have enough reward tokens.
     function safeRewardTransfer(address _to, uint256 _amount) internal {
-        IReverseum(fund).transferTo(address(rewardToken), _to, _amount);
+        IConsolidatedFund(fund).transferTo(address(rewardToken), _to, _amount);
     }
 
     function setRewardPerSecond(uint256 _rewardPerSecond) external onlyOwner {
