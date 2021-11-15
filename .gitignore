@@ -1,0 +1,7 @@
+
+.idea/
+
+build/contracts
+build/deployments/1666600000
+
+build/deployments/__pycache__/
