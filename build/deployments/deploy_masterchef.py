@@ -32,6 +32,7 @@ token = "0xED0B4b0F0E2c17646682fc98ACe09feB99aF3adE"
 treasury = "0x3153A73841844953ea3BE0Da05029C18E30e3392"
 masterchef = "0xeEA71889c062c135014Ec34825a1958c87A2Ac61"
 auto_rvrs = "0xC9ED8bfb89F5B5ca965AA8cEAacF75576C06211E"
+auto_rvrs2 = "0x0b075c7F350E0E844d76dFDe4D4c816a365dC879"
 # admin = Accs.deployer
 
 
@@ -39,6 +40,7 @@ rvrs = Contract.from_abi("ReverseToken", token, abi=ReverseToken.abi)
 reverseum = Contract.from_abi("Reverseum", treasury, abi=Reverseum.abi)
 chef = Contract.from_abi("CoffinMakerV2", masterchef, abi=CoffinMakerV2.abi)
 vault = Contract.from_abi("AutoRvrs", auto_rvrs, abi=AutoRvrs.abi)
+vault2= Contract.from_abi("AutoRvrs", auto_rvrs2, abi=AutoRvrs.abi)
 
 
 # ust_bond = Contract.from_abi("BondingPool", '', abi=BondingPool.abi)
@@ -72,6 +74,7 @@ vault = Contract.from_abi("AutoRvrs", auto_rvrs, abi=AutoRvrs.abi)
 # resp = rvrs.transferOwnership(chef, {'from': Accs.deployer})
 
 vault = AutoRvrs.deploy(rvrs, chef, admin, multisig, {'from': Accs.deployer})
+vault2 = AutoRvrs.deploy(rvrs, chef, admin, multisig, {'from': Accs.deployer})
 
 
 # Bond pools

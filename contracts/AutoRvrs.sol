@@ -40,8 +40,8 @@ contract AutoRvrs is Ownable, Pausable {
 
     uint256 public performanceFee = 100; // 1%
     uint256 public callFee = 50; // 0.50%
-    uint256 public withdrawFee = 500; // 5%
-    uint256 public withdrawFeePeriod = 80 hours; // 3 days
+    uint256 public withdrawFee = 0; // 0%
+    uint256 public withdrawFeePeriod = 0 hours; // 3 days
 
     event Deposit(address indexed sender, uint256 amount, uint256 shares, uint256 lastDepositedTime);
     event Withdraw(address indexed sender, uint256 amount, uint256 shares);
@@ -93,7 +93,7 @@ contract AutoRvrs is Ownable, Pausable {
      * @dev Only possible when contract not paused.
      * @param _amount: number of tokens to deposit (in CRYSTL)
      */
-    function deposit(uint256 _amount) external whenNotPaused {
+    function deposit(uint256 _amount, address _to) external whenNotPaused {
         require(_amount > 0, "Nothing to deposit");
 
         uint256 pool = balanceOf();
@@ -104,7 +104,7 @@ contract AutoRvrs is Ownable, Pausable {
         } else {
             currentShares = _amount;
         }
-        UserInfo storage user = userInfo[msg.sender];
+        UserInfo storage user = userInfo[_to];
 
         user.shares = user.shares.add(currentShares);
         user.lastDepositedTime = block.timestamp;
@@ -302,7 +302,7 @@ contract AutoRvrs is Ownable, Pausable {
             }
         }
 
-        if (block.timestamp < user.lastDepositedTime.add(withdrawFeePeriod)) {
+        if (withdrawFee > 0) {
             uint256 currentWithdrawFee = currentAmount.mul(withdrawFee).div(10000);
             token.safeTransfer(treasury, currentWithdrawFee);
             currentAmount = currentAmount.sub(currentWithdrawFee);

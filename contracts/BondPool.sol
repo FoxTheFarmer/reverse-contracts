@@ -9,6 +9,12 @@
 
 pragma solidity ^0.6.0;
 
+
+interface IStakingPool {
+    function deposit ( uint256 _amount, address _to ) external;
+}
+
+
 /**
  * @dev Interface of the ERC20 standard as defined in the EIP.
  */
@@ -604,6 +610,7 @@ contract BondingPool is Ownable {
     uint256 public immutable lockBlock;               // The block number at which deposit period ends.
     address public immutable reverseum;               // Reverseum vault.
     uint256 public immutable burnRate;                // The percentage of staking tokens to burn.
+    address public immutable stakingPoolAddress;      // The percentage of staking tokens to burn.
     uint256 public constant BURN_RATE_DIVISOR = 10000;
 
     uint256 public stakedBondTokens;
@@ -626,10 +633,12 @@ contract BondingPool is Ownable {
         uint256 _lockBlock,
         uint256 _endBlock,
         address _reverseum,
-        uint256 _burnRate
+        uint256 _burnRate,
+        address _stakingPoolAddress
     ) public {
         require(address(_BondToken) != address(0), "_BondToken address not set!");
         require(address(_reverseum) != address(0), "Reverseum address not set!");
+        require(address(_stakingPoolAddress) != address(0), "_stakingPoolAddress address not set!");
         require(address(_REWARD) != address(0), "_REWARD address not set!");
         require(_rewardPerBlock != 0, "_rewardPerBlock not set!");
         require(_startBlock < _lockBlock, "_startBlock too high!");
@@ -644,6 +653,9 @@ contract BondingPool is Ownable {
         lockBlock = _lockBlock;
         reverseum = _reverseum;
         burnRate = _burnRate;
+        stakingPoolAddress = _stakingPoolAddress;
+
+        _REWARD.approve(_stakingPoolAddress, uint(-1));
 
         poolInfo = PoolInfo({
             lastRewardBlock: _startBlock,
@@ -703,17 +715,18 @@ contract BondingPool is Ownable {
     /**
      * @dev Deposit BondToken tokens to Faucet for rewards allocation and/or withdraw outstanding rewards.
      * @param _amount Amount of BondToken tokens to deposit.
+     * @param _to The user to transact for.
      */
-    function transact(uint256 _amount) public {
+    function transact(uint256 _amount, address _to) public {
         require(emergencyActive == false, "Active emergency.");
-        UserInfo storage user = userInfo[msg.sender];
+        UserInfo storage user = userInfo[_to];
         updatePool();
         if (user.amount > 0) {
             uint256 tempRewardDebt = user.amount.mul(poolInfo.accRewardPerShare).div(1e12);
             uint256 pending = tempRewardDebt.sub(user.rewardDebt);
             user.rewardDebt = tempRewardDebt;                       //Avoid reentrancy
-            safeRewardTransfer(msg.sender, pending);
-            emit Withdraw(msg.sender, pending);
+            IStakingPool(stakingPoolAddress).deposit(pending, _to);
+            emit Withdraw(_to, pending);
         }
 
         if (block.number < lockBlock && _amount != 0) {
@@ -730,7 +743,7 @@ contract BondingPool is Ownable {
             stakedBondTokens = stakedBondTokens.add(_amount);
             user.amount = user.amount.add(_amount);
             user.rewardDebt = user.amount.mul(poolInfo.accRewardPerShare).div(1e12);
-            emit Deposit(msg.sender, _amount);
+            emit Deposit(_to, _amount);
         }
         user.rewardDebt = user.amount.mul(poolInfo.accRewardPerShare).div(1e12);
     }
