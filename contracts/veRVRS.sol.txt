@@ -1,0 +1,294 @@
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.9;
+
+import '@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol';
+import '@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol';
+import '@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol';
+import '@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol';
+import '@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol';
+import './VeERC20Upgradeable.sol';
+import './Whitelist.sol';
+import './interfaces/IMasterchef.sol';
+import './interfaces/IVeRvrs.sol';
+import './libs/Math.sol';
+
+/// @title VeRvrs
+/// @notice RVRS: the staking contract for RVRS, as well as the token used for governance.
+/// Here are the rules of the game:
+/// If you stake RVRS, you generate veRvrs at the current `generationRate` until you reach `maxCap`
+/// If you unstake any amount of rvrs, you loose all of your veRvrs.
+/// Note that it's ownable and the owner wields tremendous power. The ownership
+/// will be transferred to a governance smart contract once Rvrs is sufficiently
+/// distributed and the community can show to govern itself.
+contract VeRvrs is
+Initializable,
+OwnableUpgradeable,
+ReentrancyGuardUpgradeable,
+PausableUpgradeable,
+VeERC20Upgradeable,
+IVeRvrs
+{
+    using SafeERC20 for IERC20;
+
+    struct UserInfo {
+        uint256 amount; // rvrs staked by user
+        uint256 rewardDebt;
+        uint256 rewardDebtVeRvrs;
+        uint256 lastClaim; // time of last claim or first deposit if user has not claimed yet
+        uint256 lastDeposit; // time of last deposit
+    }
+
+    /// @notice the rvrs token
+    IERC20 public rvrs;
+
+    /// @notice the masterchef contract
+    IMasterchef public masterchef;
+
+    /// @notice max veRvrs to staked rvrs ratio
+    /// Note if user has 10 rvrs staked, they can only have a max of 10 * maxCap veRvrs in balance
+    uint256 public maxCap = 4;
+
+    uint256 public accRewardPerShare; // for RVRS
+    uint256 public accRewardPerVeShare; // for veRVRS
+
+    uint256 public withdrawFee = 500; // in bips
+    uint256 public MAX_WITHDRAW_FEE = 2000; // 20%
+    uint256 public withdrawFeeTime = 14 days;
+    uint256 public MAX_WITHDRAW_FEE_TIME = 90 days;
+
+    /// @notice the rate of veRvrs generated per second, per rvrs staked
+    /// @dev to figure out days to cap, the formula is:
+    ///      maxCap * 1e18 / generationRate / 60 / 60 / 24
+    /// @dev to reverse engineer generation rate to target a nDays to cap:
+    ///      generationRate = maxCap * 1e18 / nDays / 60 / 60 / 24
+    uint256 public generationRate = 385802469135;
+
+    /// @notice invVvoteThreshold threshold.
+    /// @notice voteThreshold is the percentage of cap from which votes starts to count for governance proposals.
+    /// @dev inverse of the threshold to apply.
+    /// Example: th = 5% => (1/5) * 100 => invVoteThreshold = 20
+    /// Example 2: th = 3.03% => (1/3.03) * 100 => invVoteThreshold = 33
+    /// Formula is invVoteThreshold = (1 / th) * 100
+    uint256 public invVoteThreshold = 20;
+
+    /// @notice percent of rewards to veRVRS holders,
+    /// @notice rest of rewards allocated by RVRS staked
+    /// @dev in bips, i.e 100 = 1%
+    uint256 public percVeRvrsReward = 3333;
+    uint256 public TOTAL_PERC = 10000;
+
+    /// @notice user info mapping
+    mapping(address => UserInfo) public users;
+
+    /// @notice events describing staking, unstaking and claiming
+    event Staked(address indexed user, uint256 indexed amount);
+    event Unstaked(address indexed user, uint256 indexed amount);
+    event Claimed(address indexed user, uint256 indexed amount);
+
+    function initialize(
+        IERC20 _rvrs,
+        IMasterchef _masterchef
+    ) public initializer {
+        require(address(_masterchef) != address(0), 'zero address');
+        require(address(_rvrs) != address(0), 'zero address');
+
+        // Initialize veRvrs
+        __ERC20_init('veRVRS', 'veRVRS');
+        masterchef = _masterchef;
+        rvrs = rvrs;
+    }
+
+    /**
+     * @dev pause pool, restricting certain operations
+     */
+    function pause() external onlyOwner {
+        _pause();
+    }
+
+    /**
+     * @dev unpause pool, enabling certain operations
+     */
+    function unpause() external onlyOwner {
+        _unpause();
+    }
+
+    /// @notice sets maxCap
+    /// @param _maxCap the new max ratio
+    function setMaxCap(uint256 _maxCap) external onlyOwner {
+        require(_maxCap != 0, 'max cap cannot be zero');
+        maxCap = _maxCap;
+    }
+
+    /// @notice sets withdrawFee
+    /// @param _withdrawFee the new withdraw fee
+    function setWithdrawFee(uint256 _withdrawFee) external onlyOwner {
+        require(_withdrawFee <= MAX_WITHDRAW_FEE, 'withdraw fee too high');
+        withdrawFee = _withdrawFee;
+    }
+
+    /// @notice sets withdrawFeeTime
+    /// @param _withdrawFeeTime the new time
+    function setWithdrawFeeTime(uint256 _withdrawFeeTime) external onlyOwner {
+        require(_withdrawFeeTime <= MAX_WITHDRAW_FEE_TIME, 'bad withdraw fee time');
+        withdrawFeeTime = _withdrawFeeTime;
+    }
+
+    /// @notice sets generation rate
+    /// @param _generationRate the new max ratio
+    function setGenerationRate(uint256 _generationRate) external onlyOwner {
+        require(_generationRate != 0, 'generation rate cannot be zero');
+        generationRate = _generationRate;
+    }
+
+    /// @notice sets invVoteThreshold
+    /// @param _invVoteThreshold the new var
+    /// Formula is invVoteThreshold = (1 / th) * 100
+    function setInvVoteThreshold(uint256 _invVoteThreshold) external onlyOwner {
+        // onwner should set a high value if we do not want to implement an important threshold
+        require(_invVoteThreshold != 0, 'invVoteThreshold cannot be zero');
+        invVoteThreshold = _invVoteThreshold;
+    }
+
+    /// @notice checks whether user _addr has rvrs staked
+    /// @param _addr the user address to check
+    /// @return true if the user has rvrs in stake, false otherwise
+    function isUser(address _addr) public view override returns (bool) {
+        return users[_addr].amount > 0;
+    }
+
+    /// @notice returns staked amount of rvrs for user
+    /// @param _addr the user address to check
+    /// @return staked amount of rvrs
+    function getStakedRvrs(address _addr) external view override returns (uint256) {
+        return users[_addr].amount;
+    }
+
+    /// @dev explicity override multiple inheritance
+    function totalSupply() public view override(VeERC20Upgradeable, IVeERC20) returns (uint256) {
+        return super.totalSupply();
+    }
+
+    /// @dev explicity override multiple inheritance
+    function balanceOf(address account) public view override(VeERC20Upgradeable, IVeERC20) returns (uint256) {
+        return super.balanceOf(account);
+    }
+
+    /// @notice deposits RVRS into contract
+    /// @param _amount the amount of rvrs to deposit
+    function deposit(uint256 _amount) external override nonReentrant whenNotPaused {
+        require(_amount > 0, 'amount to deposit cannot be zero');
+
+        if (isUser(msg.sender)) {
+            // if user exists, first, claim his veRvrs
+            _claim(msg.sender);
+            // then, increment his holdings
+            users[msg.sender].amount += _amount;
+        } else {
+            // add new user to mapping
+            users[msg.sender].amount = _amount;
+            users[msg.sender].lastClaim = block.timestamp;
+        }
+        users[msg.sender].lastDeposit = block.timestamp;
+
+        // Get rvrs from user
+        rvrs.safeTransferFrom(msg.sender, address(this), _amount);
+    }
+
+    /// @notice claims accumulated veRvrs
+    function claim() external override nonReentrant whenNotPaused {
+        require(isUser(msg.sender), 'user has no stake');
+        _claim(msg.sender);
+    }
+
+    /// @dev private update function
+    /// @notice This works like a masterchef updatePool function
+    /// @notice This will harvest rewards and update the accumulated Rewards
+    function _update() private {
+        uint256 amount = _claimable(_addr);
+
+    /// @dev private claim function
+    /// @param _addr the address of the user to claim from
+    function _claim(address _addr) private {
+        uint256 amount = _claimable(_addr);
+
+        // update last claim time
+        users[_addr].lastClaim = block.timestamp;
+
+        if (amount > 0) {
+            emit Claimed(_addr, amount);
+            _mint(_addr, amount);
+        }
+    }
+
+    /// @notice Calculate the amount of veRvrs that can be claimed by user
+    /// @param _addr the address to check
+    /// @return amount of veRvrs that can be claimed by user
+    function claimable(address _addr) external view returns (uint256) {
+        require(_addr != address(0), 'zero address');
+        return _claimable(_addr);
+    }
+
+    /// @dev private claim function
+    /// @param _addr the address of the user to claim from
+    function _claimable(address _addr) private view returns (uint256) {
+        UserInfo storage user = users[_addr];
+
+        // get seconds elapsed since last claim
+        uint256 secondsElapsed = block.timestamp - user.lastClaim;
+
+        // calculate pending amount
+        // Math.mwmul used to multiply wad numbers
+        uint256 pending = Math.wmul(user.amount, secondsElapsed * generationRate);
+
+        // get user's veRvrs balance
+        uint256 userVeRvrsBalance = balanceOf(_addr);
+
+        // user veRvrs balance cannot go above user.amount * maxCap
+        uint256 maxveRvrsCap = user.amount * maxCap;
+
+        // first, check that user hasn't reached the max limit yet
+        if (userveRvrsBalance < maxveRvrsCap) {
+            // then, check if pending amount will make user balance overpass maximum amount
+            if ((userveRvrsBalance + pending) > maxveRvrsCap) {
+                return maxveRvrsCap - userveRvrsBalance;
+            } else {
+                return pending;
+            }
+        }
+        return 0;
+    }
+
+    /// @notice withdraws staked rvrs
+    /// @param _amount the amount of rvrs to unstake
+    /// Note Beware! you will loose all of your veRvrs if you unstake any amount of rvrs!
+    function withdraw(uint256 _amount) external override nonReentrant whenNotPaused {
+        require(_amount > 0, 'amount to withdraw cannot be zero');
+        require(users[msg.sender].amount >= _amount, 'not enough balance');
+
+        // update his balance before burning or sending back rvrs
+        users[msg.sender].amount -= _amount;
+
+        // get user veRvrs balance that must be burned
+        uint256 userveRvrsBalance = balanceOf(msg.sender);
+
+        _burn(msg.sender, userveRvrsBalance);
+
+        // send back the staked rvrs
+        rvrs.safeTransfer(msg.sender, _amount);
+    }
+
+    /// @notice get votes for veRvrs
+    /// @dev votes should only count if account has > threshold% of current cap reached
+    /// @dev invVoteThreshold = (1/threshold%)*100
+    /// @return the valid votes
+    function getVotes(address _account) external view virtual override returns (uint256) {
+        uint256 veRvrsBalance = balanceOf(_account);
+
+        // check that user has more than voting treshold of maxCap and has rvrs in stake
+        if (veRvrsBalance * invVoteThreshold > users[_account].amount * maxCap && isUser(_account)) {
+            return veRvrsBalance;
+        } else {
+            return 0;
+        }
+    }
+}

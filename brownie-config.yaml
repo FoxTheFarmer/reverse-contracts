@@ -24,7 +24,8 @@ compiler:
     solc:
         version: null
         remappings:
-            - "@openzeppelin=OpenZeppelin/openzeppelin-contracts@4.3.2"
+            - "@openzeppelin/contracts-upgradeable=OpenZeppelin/openzeppelin-contracts-upgradeable@4.3.2/contracts"
+            - "@openzeppelin/contracts=OpenZeppelin/openzeppelin-contracts@4.3.2/contracts/"
     vyper:
         version: null
 
