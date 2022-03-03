@@ -21,33 +21,6 @@ from build.deployments.deploy_utils import setup_mainnet_accounts
 
 Accs = setup_mainnet_accounts()
 
-frontend_pool_str = """
-  {{
-    sousId: ??,
-    tokenName: '??',
-    tokenPoolAddress: '0xED0B4b0F0E2c17646682fc98ACe09feB99aF3adE',
-    quoteTokenSymbol: QuoteToken.RVRS,
-    quoteTokenPoolAddress: '0xED0B4b0F0E2c17646682fc98ACe09feB99aF3adE',
-    stakingTokenName: QuoteToken.??,
-    stakingTokenAddress: '{want_address}',
-    contractAddress: {{
-      1666700000: '{contract_address}',
-      1666600000: '{contract_address}',
-    }},
-    poolCategory: PoolCategory.CORE,
-    projectLink: '',
-    harvest: true,
-    tokenPerBlock: '{rew_per_block}',
-    sortOrder: 1,
-    isFinished: false,
-    isDepositFinished: false,
-    startBlock: {start_block},
-    endBlock: {end_block},
-    lockBlock: {end_block},
-    tokenDecimals: 18,
-  }},
-"""
-
 
 LP_UST_RVRS = "0xF8838fcC026d8e1F40207AcF5ec1DA0341c37fe2"
 LP_RVRS_ONE = "0xCDe0A00302CF22B3Ac367201FBD114cEFA1729b4"
