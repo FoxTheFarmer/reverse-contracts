@@ -51,6 +51,7 @@ IVeRvrs
 
     /// @notice Total reverse staked
     uint256 public totalStaked;
+    uint256 public totalRewardsClaimed;
     uint256 public lastRewardTime;
     uint256 public accRewardPerShare; // for RVRS
     uint256 public accRewardPerVeShare; // for veRVRS
@@ -61,14 +62,17 @@ IVeRvrs
     uint256 public MAX_WITHDRAW_FEE = 2000; // 20%
     uint256 public withdrawFeeTime = 14 days;
     uint256 public MAX_WITHDRAW_FEE_TIME = 90 days;
-    uint256 public pid; // pid for custom masterchef pool
+    uint256 public pid; // pid for custom token masterchef pool
+
+    /// @notice This is so we can set a warmup period with no rewards
+    bool public rewardsStarted = false;
 
     /// @notice the rate of veRvrs generated per second, per rvrs staked
     /// @dev to figure out days to cap, the formula is:
     ///      maxCap * 1e18 / generationRate / 60 / 60 / 24
     /// @dev to reverse engineer generation rate to target a nDays to cap:
     ///      generationRate = maxCap * 1e18 / nDays / 60 / 60 / 24
-    uint256 public generationRate = 1111111111111111; // 385802469135;
+    uint256 public generationRate = 385802469135;
 
     /// @notice invVvoteThreshold threshold.
     /// @notice voteThreshold is the percentage of cap from which votes starts to count for governance proposals.
@@ -107,6 +111,7 @@ IVeRvrs
 
         // Initialize veRvrs
         __ERC20_init('veRVRS', 'veRVRS');
+        __Ownable_init();
         masterchef = _masterchef;
         rvrs = _rvrs;
         rvrsDAO = _rvrsDAO;
@@ -125,6 +130,14 @@ IVeRvrs
      */
     function unpause() external onlyOwner {
         _unpause();
+    }
+
+    /**
+    * @dev start rewards for everyone
+     */
+    function startRewards() external onlyOwner {
+        require(!rewardsStarted, 'rewards already started');
+        rewardsStarted = true;
     }
 
     /// @notice sets maxCap
@@ -240,11 +253,13 @@ IVeRvrs
         userInfo[_to].lastDeposit = block.timestamp;
 
         // Get rvrs from user
+        totalStaked += _amount;
         rvrs.safeTransferFrom(msg.sender, address(this), _amount);
     }
 
     /// @notice claims accumulated rvrs and veRvrs
     function claim() external override nonReentrant whenNotPaused {
+        require(rewardsStarted, 'rewards not started yet');
         require(isUser(msg.sender), 'user has no stake');
         UserInfo storage user = userInfo[msg.sender];
 
@@ -264,6 +279,9 @@ IVeRvrs
     /// @notice This works like a masterchef updatePool function
     /// @notice This will harvest rewards and update the accumulated Rewards
     function _update() private {
+        if (!rewardsStarted) {
+            return;
+        }
         if (block.timestamp <= lastRewardTime) {
             return;
         }
@@ -272,9 +290,9 @@ IVeRvrs
             return;
         }
         uint256 amountBefore = rvrs.balanceOf(address(this));
-        // TODO - handle init with no rewards
         IMasterchef(masterchef).harvest(pid, address(this));
         uint256 reward = rvrs.balanceOf(address(this)).sub(amountBefore);
+        totalRewardsClaimed += reward;
         if (reward == 0) {
             lastRewardTime = block.timestamp;
             return;
@@ -287,50 +305,74 @@ IVeRvrs
         lastRewardTime = block.timestamp;
     }
 
+    function accRewardPerShareNow() public view returns (uint256) {
+        // Have to do 90% since masterchef doesn't account for it
+        uint256 pendingTotal = IMasterchef(masterchef).pendingReward(pid, address(this)).mul(ACC_REWARD_PRECISION).mul(9).div(10);
+        return accRewardPerShare + pendingTotal.mul(TOTAL_PERC.sub(percVeRvrsReward)).div(TOTAL_PERC).div(totalStaked);
+    }
+
+    function accRewardPerVeShareNow() public view returns (uint256) {
+        // Have to do 90% since masterchef doesn't account for it
+        uint256 pendingTotal = IMasterchef(masterchef).pendingReward(pid, address(this)).mul(ACC_REWARD_PRECISION).mul(9).div(10);
+        return accRewardPerVeShare + pendingTotal.mul(percVeRvrsReward).div(TOTAL_PERC).div(totalSupply());
+    }
+
+    /// @dev pending RVRS rewards if they claim
+    /// @param _user the address of the user
+    function pendingRewards(address _user) public view returns (uint256) {
+        UserInfo storage user = userInfo[_user];
+        uint256 pending = user.amount.mul(accRewardPerShareNow()).div(ACC_REWARD_PRECISION).sub(user.rewardDebt);
+        pending += balanceOf(_user).mul(accRewardPerVeShareNow()).div(ACC_REWARD_PRECISION).sub(user.rewardDebtVeRvrs);
+        return pending;
+    }
+
     /// @dev private claim function
-    /// @param _addr the address of the user to claim from
-    function _claim(address _addr) private {
-        uint256 amount = _claimable(_addr);
-        UserInfo storage user = userInfo[_addr];
+    /// @param _user the address of the user to claim from
+    function _claim(address _user) private {
+        if (!rewardsStarted) {
+            return;
+        }
+        uint256 amount = _claimable(_user);
+        UserInfo storage user = userInfo[_user];
 
         // update last claim time
         user.lastClaim = block.timestamp;
 
         // Send pending rewards before minting
         uint256 pending = user.amount.mul(accRewardPerShare).div(ACC_REWARD_PRECISION).sub(user.rewardDebt);
-        pending += balanceOf(_addr).mul(accRewardPerVeShare).div(ACC_REWARD_PRECISION).sub(user.rewardDebtVeRvrs);
+        pending += balanceOf(_user).mul(accRewardPerVeShare).div(ACC_REWARD_PRECISION).sub(user.rewardDebtVeRvrs);
 
         if (pending > 0) {
-            rvrs.safeTransfer(_addr, pending);
+            rvrs.safeTransfer(_user, pending);
         }
 
         if (amount > 0) {
-            emit Claimed(_addr, amount);
-            _mint(_addr, amount);
+            emit Claimed(_user, amount);
+            _mint(_user, amount);
         }
     }
 
     /// @notice Calculate the amount of veRvrs that can be claimed by user
-    /// @param _addr the address to check
+    /// @param _user the address to check
     /// @return amount of veRvrs that can be claimed by user
-    function claimable(address _addr) external view returns (uint256) {
-        require(_addr != address(0), 'zero address');
-        return _claimable(_addr);
+    function claimable(address _user) external view returns (uint256) {
+        require(_user != address(0), 'zero address');
+        return _claimable(_user);
     }
 
     /// @dev private claim function
-    /// @param _addr the address of the user to claim from
-    function _claimable(address _addr) private view returns (uint256) {
-        UserInfo storage user = userInfo[_addr];
+    /// @param _user the address of the user to claim from
+    function _claimable(address _user) private view returns (uint256) {
+        UserInfo storage user = userInfo[_user];
 
         // get seconds elapsed since last claim
         uint256 secondsElapsed = block.timestamp - user.lastClaim;
 
         // calculate pending amount
-        uint256 pending = user.amount.mul(secondsElapsed).mul(generationRate);
+        uint256 pending = user.amount.mul(secondsElapsed).mul(generationRate).div(1e18);
 
         // get user's veRvrs balance
-        uint256 userVeRvrsBalance = balanceOf(_addr);
+        uint256 userVeRvrsBalance = balanceOf(_user);
 
         // user veRvrs balance cannot go above user.amount * maxCap
         uint256 maxveRvrsCap = user.amount * maxCap;
@@ -354,7 +396,8 @@ IVeRvrs
         require(_amount > 0, 'amount to withdraw cannot be zero');
         require(userInfo[msg.sender].amount >= _amount, 'not enough balance');
         UserInfo storage user = userInfo[msg.sender];
-        // claim first
+        // update and claim first
+        _update();
         _claim(msg.sender);
 
         // update his balance before burning or sending back rvrs
@@ -365,8 +408,9 @@ IVeRvrs
 
         _burn(msg.sender, userVeRvrsBalance);
 
+        totalStaked -= _amount;
         if (withdrawFee > 0) {
-            if (block.timestamp - user.lastDeposit > withdrawFeeTime) {
+            if (block.timestamp - user.lastDeposit < withdrawFeeTime) {
                 uint256 fee = _amount.mul(withdrawFee).div(TOTAL_PERC);
                 if (fee > 0) {
                     _amount = _amount.sub(fee);
@@ -395,5 +439,10 @@ IVeRvrs
         } else {
             return 0;
         }
+    }
+
+    function recoverLostToken(address tokenAddress) external onlyOwner {
+        require(tokenAddress != address(rvrs), "cannot withdraw RVRS");
+        IERC20(tokenAddress).transfer(msg.sender, IERC20(tokenAddress).balanceOf(address(this)));
     }
 }

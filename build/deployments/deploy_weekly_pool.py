@@ -52,7 +52,7 @@ end_block = lock_block + 1
 
 wantAddress = UST
 burnRate = 0
-rew_per_block = 29000000000000000
+rew_per_block = 43000000000000000
 
 print(f"Deploying bond pool for\n"
       f" want:\tUST ({wantAddress})\n"
