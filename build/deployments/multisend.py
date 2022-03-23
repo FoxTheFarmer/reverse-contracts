@@ -4,13 +4,14 @@ from build.deployments.deploy_utils import setup_mainnet_accounts, balanceOf
 Accs = setup_mainnet_accounts()
 
 WALLET_FILENAME = "../../cryptomerchant/rvrs_wallets.csv"
-# WALLET_FILENAME = "../../cryptomerchant/rvrs_jewel_pool_wallets.csv"
 UST = "0x224e64ec1BDce3870a6a6c777eDd450454068FEC"
 RVRS = "0xED0B4b0F0E2c17646682fc98ACe09feB99aF3adE"
 TRANQ = "0xCf1709Ad76A79d5a60210F23e81cE2460542A836"
 
 multisend = Contract.from_abi("MultiSend", "0xDd15f3778D5B67798249361B3dE74aF30D12e084", MultiSend.abi)
 
+# rewarder = Contract.from_abi("rewardClaim", "0xB2817845f448C33516CcC68898ecfE6155A66F45", RewardClaim.abi)
+# rewarder = rewardClaim.deploy(UST, {'from': Accs.deployer})
 
 AMT_UST = balanceOf(UST, multisend) - 1e9
 print(f"Multisend UST balance: {AMT_UST/1e18:,.0f}")

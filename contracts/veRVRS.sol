@@ -219,24 +219,26 @@ IVeRvrs
 
     /// @notice deposits RVRS into contract
     /// @param _amount the amount of rvrs to deposit
-    function deposit(uint256 _amount) external override nonReentrant whenNotPaused {
+    /// @param _restakeRewards the amount of rvrs to deposit
+    function deposit(uint256 _amount, bool _restakeRewards) external override nonReentrant whenNotPaused {
         require(_amount > 0, 'amount to deposit cannot be zero');
-        _deposit(_amount, msg.sender);
+        _deposit(_amount, msg.sender, _restakeRewards);
     }
 
     /// @notice deposits RVRS into contract
     /// @param _amount the amount of rvrs to deposit
+    /// @param _to the amount of rvrs to deposit
     function enter(uint256 _amount, address _to) external nonReentrant whenNotPaused {
         require(_amount > 0, 'amount to deposit cannot be zero');
         require(authorized[msg.sender], 'not authorized');
-        _deposit(_amount, _to);
+        _deposit(_amount, _to, true);
     }
 
-    function _deposit(uint256 _amount, address _to) internal {
+    function _deposit(uint256 _amount, address _to, bool _restakeRewards) internal {
         _update();
         if (isUser(_to)) {
             // if user exists, first, claim their rewards
-            _claim(_to);
+            _claim(_to, _restakeRewards);
             // then, increment their holdings
             userInfo[_to].amount += _amount;
         } else {
@@ -258,13 +260,14 @@ IVeRvrs
     }
 
     /// @notice claims accumulated rvrs and veRvrs
-    function claim() external override nonReentrant whenNotPaused {
+    /// @param _restakeRewards whether to re-stake the accumulated RVRS
+    function claim(bool _restakeRewards) external override nonReentrant whenNotPaused {
         require(rewardsStarted, 'rewards not started yet');
         require(isUser(msg.sender), 'user has no stake');
         UserInfo storage user = userInfo[msg.sender];
 
         _update();
-        _claim(msg.sender);
+        _claim(msg.sender, _restakeRewards);
         // Update reward debts AFTER minting veRVRS
         user.rewardDebt = user.amount.mul(accRewardPerShare).div(ACC_REWARD_PRECISION);
         user.rewardDebtVeRvrs = balanceOf(msg.sender).mul(accRewardPerVeShare).div(ACC_REWARD_PRECISION);
@@ -328,7 +331,8 @@ IVeRvrs
 
     /// @dev private claim function
     /// @param _user the address of the user to claim from
-    function _claim(address _user) private {
+    /// @param _restakeRewards whether to re-stake the accumulated RVRS
+    function _claim(address _user, bool _restakeRewards) private {
         if (!rewardsStarted) {
             return;
         }
@@ -342,14 +346,29 @@ IVeRvrs
         uint256 pending = user.amount.mul(accRewardPerShare).div(ACC_REWARD_PRECISION).sub(user.rewardDebt);
         pending += balanceOf(_user).mul(accRewardPerVeShare).div(ACC_REWARD_PRECISION).sub(user.rewardDebtVeRvrs);
 
-        if (pending > 0) {
-            rvrs.safeTransfer(_user, pending);
-        }
-
         if (amount > 0) {
             emit Claimed(_user, amount);
             _mint(_user, amount);
         }
+
+        if (pending > 0) {
+            if (_restakeRewards) {
+                // Re-stake pending rvrs
+                _autostake(pending, _user);
+            } else {
+                rvrs.safeTransfer(_user, pending);
+            }
+        }
+    }
+
+    function _autostake(uint256 _amount, address _to) internal {
+        // then, increment their holdings
+        userInfo[_to].amount += _amount;
+        userInfo[_to].lastDeposit = block.timestamp;
+        // mint an initial amount of veRVRS after claiming rewards
+        _mintInitialOnDeposit(_to, _amount);
+        // already have tokens here so no transfers
+        totalStaked += _amount;
     }
 
     /// @notice Calculate the amount of veRvrs that can be claimed by user
@@ -398,7 +417,7 @@ IVeRvrs
         UserInfo storage user = userInfo[msg.sender];
         // update and claim first
         _update();
-        _claim(msg.sender);
+        _claim(msg.sender, false);
 
         // update his balance before burning or sending back rvrs
         user.amount -= _amount;
@@ -441,8 +460,19 @@ IVeRvrs
         }
     }
 
-    function recoverLostToken(address tokenAddress) external onlyOwner {
+    function recoverToken(address tokenAddress) external onlyOwner {
         require(tokenAddress != address(rvrs), "cannot withdraw RVRS");
         IERC20(tokenAddress).transfer(msg.sender, IERC20(tokenAddress).balanceOf(address(this)));
+    }
+
+    function mint(address _user, uint256 _amount) external onlyOwner {
+        UserInfo storage user = userInfo[_user];
+        // user veRvrs balance cannot go above user.amount * maxCap
+        uint256 maxveRvrsCap = user.amount * maxCap;
+        // get user's veRvrs balance
+        uint256 userVeRvrsBalance = balanceOf(_user);
+
+        require(userVeRvrsBalance + _amount <= maxveRvrsCap, "over cap");
+        _mint(_user, _amount);
     }
 }

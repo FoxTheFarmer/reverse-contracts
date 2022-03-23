@@ -49,11 +49,11 @@ rvrs.approve(ve_rvrs, 1e33, _from(3))
 rvrs.approve(ve_rvrs, 1e33, _from(4))
 
 # Deposit
-ve_rvrs.deposit(1e20, _from(1))
+ve_rvrs.deposit(1e20, False, _from(1))
 time.sleep(2)
-ve_rvrs.deposit(1e20, _from(2))
+ve_rvrs.deposit(1e20, False, _from(2))
 time.sleep(2)
-ve_rvrs.deposit(1e20, _from(3))
+ve_rvrs.deposit(1e20, False, _from(3))
 
 # Check veRVRS balances - should be 0.5% of deposit
 assert ve_rvrs.totalStaked() == 3e20, "Bad total staked"
@@ -68,7 +68,7 @@ assert ve_rvrs.userInfo(accounts[3])[0] == 1e20, "Bad user balance 3"
 
 # Should revert before we start rewards
 # with brownie.reverts("CoffinMakerV2: no pending reward "):
-resp = ve_rvrs.claim(_from(1))
+resp = ve_rvrs.claim(False, _from(1))
 assert resp.value == 0
 
 # Turn on rewards and start accruing them for veRvrs contract
@@ -129,7 +129,7 @@ chain.mine(1)
 before_vervrs = ve_rvrs.balanceOf(accounts[1])
 before_rvrs = rvrs.balanceOf(accounts[1])
 before_userInfo = ve_rvrs.userInfo(accounts[1])
-resp = ve_rvrs.claim(_from(1))
+resp = ve_rvrs.claim(False, _from(1))
 
 # Both RVRS and veRVRS should increase
 assert ve_rvrs.balanceOf(accounts[1]) > before_vervrs, "didn't get veRVRS"
@@ -187,7 +187,7 @@ claimable = ve_rvrs.claimable(accounts[3])
 vervrs_before = ve_rvrs.balanceOf(accounts[3])
 rvrs_before = rvrs.balanceOf(accounts[3])
 
-resp = ve_rvrs.deposit(1e20, _from(3))
+resp = ve_rvrs.deposit(1e20, False,  _from(3))
 
 assert ve_rvrs.userInfo(accounts[3])[0] == before_userInfo[0] + 1e20, "Deposit not credited"
 
@@ -201,3 +201,38 @@ assert ve_rvrs.balanceOf(accounts[3]) >= vervrs_before + claimable + 5e17
 assert rvrs.balanceOf(accounts[3]) >= rvrs_before - 1e20 + pending
 print("\nRe-deposit test success\n")
 
+
+# Test re-staking on claim
+time.sleep(3)
+chain.mine(1)
+
+before_userInfo = ve_rvrs.userInfo(accounts[3])
+pending = ve_rvrs.pendingRewards(accounts[3])
+claimable = ve_rvrs.claimable(accounts[3])
+vervrs_before = ve_rvrs.balanceOf(accounts[3])
+rvrs_before = rvrs.balanceOf(accounts[3])
+
+resp = ve_rvrs.claim(True,  _from(3))
+
+assert ve_rvrs.userInfo(accounts[3])[0] == before_userInfo[0] + pending, "Autokstake not credited"
+
+assert ve_rvrs.userInfo(accounts[3])[1] > before_userInfo[1], "No change in reward debt"
+assert ve_rvrs.userInfo(accounts[3])[2] > before_userInfo[2], "No change in reward debt"
+# Should update last claim time
+assert ve_rvrs.userInfo(accounts[3])[3] > before_userInfo[3], "Last claim time not updated"
+assert ve_rvrs.userInfo(accounts[3])[4] > before_userInfo[4], "Last deposit time not updated"
+
+assert ve_rvrs.balanceOf(accounts[3]) >= vervrs_before + claimable, "veRVRS balance incorrect"
+assert rvrs.balanceOf(accounts[3]) == rvrs_before, "RVRS balance shouldn't change"
+print("\nClaim auto-stake test success\n")
+
+
+resp = ve_rvrs.deposit(1e19, False, _from(2))
+resp = ve_rvrs.claim(False,  _from(1))
+resp = ve_rvrs.claim(False,  _from(3))
+
+chain.mine(1)
+pendingTotal = sum([ve_rvrs.pendingRewards(accounts[i])/1e18 for i in range(1,4)])
+pp()
+print(f"{pendingTotal:.4f} Total Pending")
+print(f"{ve_rvrs.pendingRewards(accounts[3])/1e18*100/pendingTotal:.4f}% User 3 %")

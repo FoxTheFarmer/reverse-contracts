@@ -9,9 +9,9 @@ import './IVeERC20.sol';
 interface IVeRvrs is IVeERC20 {
     function isUser(address _addr) external view returns (bool);
 
-    function deposit(uint256 _amount) external;
+    function deposit(uint256 _amount, bool _restakeRewards) external;
 
-    function claim() external;
+    function claim(bool _restakeRewards) external;
 
     function withdraw(uint256 _amount) external;
 
