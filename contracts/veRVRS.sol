@@ -55,13 +55,13 @@ IVeRvrs
     uint256 public lastRewardTime;
     uint256 public accRewardPerShare; // for RVRS
     uint256 public accRewardPerVeShare; // for veRVRS
-    uint256 private constant ACC_REWARD_PRECISION = 1e12;
+    uint256 private constant ACC_REWARD_PRECISION = 1e18;
 
-    uint256 public initialDepositMint = 50; // in bips 0.5%
-    uint256 public withdrawFee = 500; // in bips
-    uint256 public MAX_WITHDRAW_FEE = 2000; // 20%
-    uint256 public withdrawFeeTime = 14 days;
-    uint256 public MAX_WITHDRAW_FEE_TIME = 90 days;
+    uint256 public initialDepositMint; // in bips 50 = 0.5%
+    uint256 public withdrawFee; // in bips
+    uint256 public constant  MAX_WITHDRAW_FEE = 2000; // 20%
+    uint256 public withdrawFeeTime;
+    uint256 public constant  MAX_WITHDRAW_FEE_TIME = 90 days;
     uint256 public pid; // pid for custom token masterchef pool
 
     /// @notice This is so we can set a warmup period with no rewards
@@ -72,7 +72,8 @@ IVeRvrs
     ///      maxCap * 1e18 / generationRate / 60 / 60 / 24
     /// @dev to reverse engineer generation rate to target a nDays to cap:
     ///      generationRate = maxCap * 1e18 / nDays / 60 / 60 / 24
-    uint256 public generationRate = 385802469135;
+    uint256 public generationRate;
+    uint256 public constant MAX_GENERATION_RATE = 38580246913500;
 
     /// @notice invVvoteThreshold threshold.
     /// @notice voteThreshold is the percentage of cap from which votes starts to count for governance proposals.
@@ -80,13 +81,13 @@ IVeRvrs
     /// Example: th = 5% => (1/5) * 100 => invVoteThreshold = 20
     /// Example 2: th = 3.03% => (1/3.03) * 100 => invVoteThreshold = 33
     /// Formula is invVoteThreshold = (1 / th) * 100
-    uint256 public invVoteThreshold = 20;
+    uint256 public invVoteThreshold;
 
     /// @notice percent of rewards to veRVRS holders,
     /// @notice rest of rewards allocated by RVRS staked
     /// @dev in bips, i.e 100 = 1%
-    uint256 public percVeRvrsReward = 3333;
-    uint256 public TOTAL_PERC = 10000;
+    uint256 public constant percVeRvrsReward = 3333;
+    uint256 public constant TOTAL_PERC = 10000;
 
     /// @notice user info mapping
     mapping(address => UserInfo) public userInfo;
@@ -96,8 +97,18 @@ IVeRvrs
 
     /// @notice events describing staking, unstaking and claiming
     event Staked(address indexed user, uint256 indexed amount);
-    event Unstaked(address indexed user, uint256 indexed amount);
-    event Claimed(address indexed user, uint256 indexed amount);
+    event Unstaked(address indexed user, uint256 indexed amount, uint256 fee);
+    event Claimed(address indexed user, uint256 indexed amount, bool autostake);
+
+    event RewardsStarted(address indexed user);
+    event UpdateMaxCap(uint256 indexed oldCap, uint256 indexed newCap);
+    event UpdateAuthorized(address indexed user, bool isAuth);
+    event UpdateWithdrawFee(uint256 indexed oldFee, uint256 indexed newFee);
+    event UpdateWithdrawFeeTime(uint256 indexed oldFeeTime, uint256 indexed newFeeTime);
+    event UpdateGenerationRate(uint256 indexed oldRate, uint256 indexed newRate);
+    event UpdateInitialDepositMint(uint256 indexed oldAmount, uint256 indexed newAmount);
+
+    event UpdateInvVoteThreshold(uint256 indexed oldThresold, uint256 indexed newThresold);
 
     function initialize(
         IERC20 _rvrs,
@@ -116,6 +127,15 @@ IVeRvrs
         rvrs = _rvrs;
         rvrsDAO = _rvrsDAO;
         pid = _pid;
+
+        // Setup initial variables
+        maxCap = 4;
+        initialDepositMint = 50; // in bips 0.5%
+        withdrawFee = 500; // in bips
+        generationRate = 385802469135;
+        invVoteThreshold = 20;
+        withdrawFeeTime = 14 days;
+        rewardsStarted = false;
     }
 
     /**
@@ -138,6 +158,7 @@ IVeRvrs
     function startRewards() external onlyOwner {
         require(!rewardsStarted, 'rewards already started');
         rewardsStarted = true;
+        emit RewardsStarted(msg.sender);
     }
 
     /// @notice sets maxCap
@@ -145,7 +166,9 @@ IVeRvrs
     /// @dev WARNING - if you lower this, there's no way to reduce it for people over the cap
     function setMaxCap(uint256 _maxCap) external onlyOwner {
         require(_maxCap != 0, 'max cap cannot be zero');
+        uint256 oldCap = maxCap;
         maxCap = _maxCap;
+        emit UpdateMaxCap(oldCap, _maxCap);
     }
 
     /// @notice sets authorized for auto-staking
@@ -153,35 +176,45 @@ IVeRvrs
     /// @param _isAuth - bool
     function setAuthorized(address _addr, bool _isAuth) external onlyOwner {
         authorized[_addr] = _isAuth;
+        emit UpdateAuthorized(_addr, _isAuth);
     }
 
     /// @notice sets withdrawFee
     /// @param _withdrawFee the new withdraw fee
     function setWithdrawFee(uint256 _withdrawFee) external onlyOwner {
         require(_withdrawFee <= MAX_WITHDRAW_FEE, 'withdraw fee too high');
+        uint256 oldFee = withdrawFee;
         withdrawFee = _withdrawFee;
+        emit UpdateWithdrawFee(oldFee, _withdrawFee);
     }
 
     /// @notice sets initialDepositMint
-    /// @param _initialDepositMint the new withdraw fee
+    /// @param _initialDepositMint the new initial deposit mint %
     function setInitialDepositMint(uint256 _initialDepositMint) external onlyOwner {
         require(_initialDepositMint > 0, 'initial mint too low');
-        require(_initialDepositMint < 1000, 'initial mint too high');
+        require(_initialDepositMint <= 1000, 'initial mint too high');
+        uint256 oldAmount = initialDepositMint;
         initialDepositMint = _initialDepositMint;
+        emit UpdateInitialDepositMint(oldAmount, _initialDepositMint);
     }
 
     /// @notice sets withdrawFeeTime
     /// @param _withdrawFeeTime the new time
     function setWithdrawFeeTime(uint256 _withdrawFeeTime) external onlyOwner {
         require(_withdrawFeeTime <= MAX_WITHDRAW_FEE_TIME, 'bad withdraw fee time');
+        uint256 oldTime = withdrawFeeTime;
         withdrawFeeTime = _withdrawFeeTime;
+        emit UpdateWithdrawFeeTime(oldTime, _withdrawFeeTime);
     }
 
     /// @notice sets generation rate
-    /// @param _generationRate the new max ratio
+    /// @param _generationRate the new generation rate
     function setGenerationRate(uint256 _generationRate) external onlyOwner {
         require(_generationRate != 0, 'generation rate cannot be zero');
+        require(_generationRate <= MAX_GENERATION_RATE, 'generation too high');
+        uint256 oldRate = generationRate;
         generationRate = _generationRate;
+        emit UpdateGenerationRate(oldRate, _generationRate);
     }
 
     /// @notice sets invVoteThreshold
@@ -190,7 +223,10 @@ IVeRvrs
     function setInvVoteThreshold(uint256 _invVoteThreshold) external onlyOwner {
         // onwner should set a high value if we do not want to implement an important threshold
         require(_invVoteThreshold != 0, 'invVoteThreshold cannot be zero');
+        require(_invVoteThreshold < maxCap * 100, 'invVoteThreshold must be less than cap');
+        uint256 oldInvVoteThreshold = invVoteThreshold;
         invVoteThreshold = _invVoteThreshold;
+        emit UpdateInvVoteThreshold(oldInvVoteThreshold, _invVoteThreshold);
     }
 
     /// @notice checks whether user _addr has rvrs staked
@@ -227,7 +263,7 @@ IVeRvrs
 
     /// @notice deposits RVRS into contract
     /// @param _amount the amount of rvrs to deposit
-    /// @param _to the amount of rvrs to deposit
+    /// @param _to the user to deposit for
     function enter(uint256 _amount, address _to) external nonReentrant whenNotPaused {
         require(_amount > 0, 'amount to deposit cannot be zero');
         require(authorized[msg.sender], 'not authorized');
@@ -257,6 +293,7 @@ IVeRvrs
         // Get rvrs from user
         totalStaked += _amount;
         rvrs.safeTransferFrom(msg.sender, address(this), _amount);
+        emit Staked(_to, _amount);
     }
 
     /// @notice claims accumulated rvrs and veRvrs
@@ -322,7 +359,7 @@ IVeRvrs
 
     /// @dev pending RVRS rewards if they claim
     /// @param _user the address of the user
-    function pendingRewards(address _user) public view returns (uint256) {
+    function pendingRewards(address _user) external view returns (uint256) {
         UserInfo storage user = userInfo[_user];
         uint256 pending = user.amount.mul(accRewardPerShareNow()).div(ACC_REWARD_PRECISION).sub(user.rewardDebt);
         pending += balanceOf(_user).mul(accRewardPerVeShareNow()).div(ACC_REWARD_PRECISION).sub(user.rewardDebtVeRvrs);
@@ -347,7 +384,6 @@ IVeRvrs
         pending += balanceOf(_user).mul(accRewardPerVeShare).div(ACC_REWARD_PRECISION).sub(user.rewardDebtVeRvrs);
 
         if (amount > 0) {
-            emit Claimed(_user, amount);
             _mint(_user, amount);
         }
 
@@ -359,6 +395,7 @@ IVeRvrs
                 rvrs.safeTransfer(_user, pending);
             }
         }
+        emit Claimed(_user, pending, _restakeRewards);
     }
 
     function _autostake(uint256 _amount, address _to) internal {
@@ -428,9 +465,10 @@ IVeRvrs
         _burn(msg.sender, userVeRvrsBalance);
 
         totalStaked -= _amount;
+        uint256 fee = 0;
         if (withdrawFee > 0) {
             if (block.timestamp - user.lastDeposit < withdrawFeeTime) {
-                uint256 fee = _amount.mul(withdrawFee).div(TOTAL_PERC);
+                fee = _amount.mul(withdrawFee).div(TOTAL_PERC);
                 if (fee > 0) {
                     _amount = _amount.sub(fee);
                     rvrs.safeTransfer(rvrsDAO, fee);
@@ -443,6 +481,7 @@ IVeRvrs
 
         // send back the staked rvrs
         rvrs.safeTransfer(msg.sender, _amount);
+        emit Unstaked(msg.sender, _amount, fee);
     }
 
     /// @notice get votes for veRvrs
@@ -463,16 +502,5 @@ IVeRvrs
     function recoverToken(address tokenAddress) external onlyOwner {
         require(tokenAddress != address(rvrs), "cannot withdraw RVRS");
         IERC20(tokenAddress).transfer(msg.sender, IERC20(tokenAddress).balanceOf(address(this)));
-    }
-
-    function mint(address _user, uint256 _amount) external onlyOwner {
-        UserInfo storage user = userInfo[_user];
-        // user veRvrs balance cannot go above user.amount * maxCap
-        uint256 maxveRvrsCap = user.amount * maxCap;
-        // get user's veRvrs balance
-        uint256 userVeRvrsBalance = balanceOf(_user);
-
-        require(userVeRvrsBalance + _amount <= maxveRvrsCap, "over cap");
-        _mint(_user, _amount);
     }
 }
