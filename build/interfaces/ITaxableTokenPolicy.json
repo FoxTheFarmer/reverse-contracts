@@ -1,0 +1,320 @@
+{
+  "abi": [
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "dollarPrice",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "taxThreshold",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "paramA",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "paramB",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "basisTaxRate",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "maxTaxRate",
+          "type": "uint256"
+        }
+      ],
+      "name": "calcTaxRate",
+      "outputs": [
+        {
+          "internalType": "uint16",
+          "name": "",
+          "type": "uint16"
+        }
+      ],
+      "stateMutability": "pure",
+      "type": "function"
+    }
+  ],
+  "ast": {
+    "absolutePath": "contracts/interfaces/ITaxableTokenPolicy.sol",
+    "exportedSymbols": {
+      "ITaxableTokenPolicy": [
+        378
+      ]
+    },
+    "id": 379,
+    "license": "MIT",
+    "nodeType": "SourceUnit",
+    "nodes": [
+      {
+        "id": 360,
+        "literals": [
+          "solidity",
+          "^",
+          "0.8",
+          ".7"
+        ],
+        "nodeType": "PragmaDirective",
+        "src": "33:23:7"
+      },
+      {
+        "abstract": false,
+        "baseContracts": [],
+        "canonicalName": "ITaxableTokenPolicy",
+        "contractDependencies": [],
+        "contractKind": "interface",
+        "fullyImplemented": false,
+        "id": 378,
+        "linearizedBaseContracts": [
+          378
+        ],
+        "name": "ITaxableTokenPolicy",
+        "nameLocation": "73:19:7",
+        "nodeType": "ContractDefinition",
+        "nodes": [
+          {
+            "functionSelector": "855ee2f7",
+            "id": 377,
+            "implemented": false,
+            "kind": "function",
+            "modifiers": [],
+            "name": "calcTaxRate",
+            "nameLocation": "109:11:7",
+            "nodeType": "FunctionDefinition",
+            "parameters": {
+              "id": 373,
+              "nodeType": "ParameterList",
+              "parameters": [
+                {
+                  "constant": false,
+                  "id": 362,
+                  "mutability": "mutable",
+                  "name": "dollarPrice",
+                  "nameLocation": "138:11:7",
+                  "nodeType": "VariableDeclaration",
+                  "scope": 377,
+                  "src": "130:19:7",
+                  "stateVariable": false,
+                  "storageLocation": "default",
+                  "typeDescriptions": {
+                    "typeIdentifier": "t_uint256",
+                    "typeString": "uint256"
+                  },
+                  "typeName": {
+                    "id": 361,
+                    "name": "uint256",
+                    "nodeType": "ElementaryTypeName",
+                    "src": "130:7:7",
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_uint256",
+                      "typeString": "uint256"
+                    }
+                  },
+                  "visibility": "internal"
+                },
+                {
+                  "constant": false,
+                  "id": 364,
+                  "mutability": "mutable",
+                  "name": "taxThreshold",
+                  "nameLocation": "168:12:7",
+                  "nodeType": "VariableDeclaration",
+                  "scope": 377,
+                  "src": "160:20:7",
+                  "stateVariable": false,
+                  "storageLocation": "default",
+                  "typeDescriptions": {
+                    "typeIdentifier": "t_uint256",
+                    "typeString": "uint256"
+                  },
+                  "typeName": {
+                    "id": 363,
+                    "name": "uint256",
+                    "nodeType": "ElementaryTypeName",
+                    "src": "160:7:7",
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_uint256",
+                      "typeString": "uint256"
+                    }
+                  },
+                  "visibility": "internal"
+                },
+                {
+                  "constant": false,
+                  "id": 366,
+                  "mutability": "mutable",
+                  "name": "paramA",
+                  "nameLocation": "199:6:7",
+                  "nodeType": "VariableDeclaration",
+                  "scope": 377,
+                  "src": "191:14:7",
+                  "stateVariable": false,
+                  "storageLocation": "default",
+                  "typeDescriptions": {
+                    "typeIdentifier": "t_uint256",
+                    "typeString": "uint256"
+                  },
+                  "typeName": {
+                    "id": 365,
+                    "name": "uint256",
+                    "nodeType": "ElementaryTypeName",
+                    "src": "191:7:7",
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_uint256",
+                      "typeString": "uint256"
+                    }
+                  },
+                  "visibility": "internal"
+                },
+                {
+                  "constant": false,
+                  "id": 368,
+                  "mutability": "mutable",
+                  "name": "paramB",
+                  "nameLocation": "224:6:7",
+                  "nodeType": "VariableDeclaration",
+                  "scope": 377,
+                  "src": "216:14:7",
+                  "stateVariable": false,
+                  "storageLocation": "default",
+                  "typeDescriptions": {
+                    "typeIdentifier": "t_uint256",
+                    "typeString": "uint256"
+                  },
+                  "typeName": {
+                    "id": 367,
+                    "name": "uint256",
+                    "nodeType": "ElementaryTypeName",
+                    "src": "216:7:7",
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_uint256",
+                      "typeString": "uint256"
+                    }
+                  },
+                  "visibility": "internal"
+                },
+                {
+                  "constant": false,
+                  "id": 370,
+                  "mutability": "mutable",
+                  "name": "basisTaxRate",
+                  "nameLocation": "249:12:7",
+                  "nodeType": "VariableDeclaration",
+                  "scope": 377,
+                  "src": "241:20:7",
+                  "stateVariable": false,
+                  "storageLocation": "default",
+                  "typeDescriptions": {
+                    "typeIdentifier": "t_uint256",
+                    "typeString": "uint256"
+                  },
+                  "typeName": {
+                    "id": 369,
+                    "name": "uint256",
+                    "nodeType": "ElementaryTypeName",
+                    "src": "241:7:7",
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_uint256",
+                      "typeString": "uint256"
+                    }
+                  },
+                  "visibility": "internal"
+                },
+                {
+                  "constant": false,
+                  "id": 372,
+                  "mutability": "mutable",
+                  "name": "maxTaxRate",
+                  "nameLocation": "279:10:7",
+                  "nodeType": "VariableDeclaration",
+                  "scope": 377,
+                  "src": "271:18:7",
+                  "stateVariable": false,
+                  "storageLocation": "default",
+                  "typeDescriptions": {
+                    "typeIdentifier": "t_uint256",
+                    "typeString": "uint256"
+                  },
+                  "typeName": {
+                    "id": 371,
+                    "name": "uint256",
+                    "nodeType": "ElementaryTypeName",
+                    "src": "271:7:7",
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_uint256",
+                      "typeString": "uint256"
+                    }
+                  },
+                  "visibility": "internal"
+                }
+              ],
+              "src": "120:175:7"
+            },
+            "returnParameters": {
+              "id": 376,
+              "nodeType": "ParameterList",
+              "parameters": [
+                {
+                  "constant": false,
+                  "id": 375,
+                  "mutability": "mutable",
+                  "name": "",
+                  "nameLocation": "-1:-1:-1",
+                  "nodeType": "VariableDeclaration",
+                  "scope": 377,
+                  "src": "319:6:7",
+                  "stateVariable": false,
+                  "storageLocation": "default",
+                  "typeDescriptions": {
+                    "typeIdentifier": "t_uint16",
+                    "typeString": "uint16"
+                  },
+                  "typeName": {
+                    "id": 374,
+                    "name": "uint16",
+                    "nodeType": "ElementaryTypeName",
+                    "src": "319:6:7",
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_uint16",
+                      "typeString": "uint16"
+                    }
+                  },
+                  "visibility": "internal"
+                }
+              ],
+              "src": "318:8:7"
+            },
+            "scope": 378,
+            "src": "100:228:7",
+            "stateMutability": "pure",
+            "virtual": false,
+            "visibility": "external"
+          }
+        ],
+        "scope": 379,
+        "src": "63:271:7",
+        "usedErrors": []
+      }
+    ],
+    "src": "33:302:7"
+  },
+  "contractName": "ITaxableTokenPolicy",
+  "dependencies": [],
+  "offset": [
+    63,
+    334
+  ],
+  "sha1": "f5a0cc89490c44aef67211efe2e1f5751e28de50",
+  "source": "// SPDX-License-Identifier: MIT\n\npragma solidity ^0.8.7;\n\n    \ninterface ITaxableTokenPolicy  {\n    function calcTaxRate(\n        uint256 dollarPrice, \n        uint256 taxThreshold, \n        uint256 paramA, \n        uint256 paramB, \n        uint256 basisTaxRate,\n        uint256 maxTaxRate\n    ) external pure returns (uint16) ;\n    }\n",
+  "type": "interface"
+}

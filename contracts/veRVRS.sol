@@ -47,7 +47,7 @@ IVeRvrs
 
     /// @notice max veRvrs to staked rvrs ratio
     /// Note if user has 10 rvrs staked, they can only have a max of 10 * maxCap veRvrs in balance
-    uint256 public maxCap = 4;
+    uint256 public maxCap;
 
     /// @notice Total reverse staked
     uint256 public totalStaked;
@@ -166,6 +166,7 @@ IVeRvrs
     /// @dev WARNING - if you lower this, there's no way to reduce it for people over the cap
     function setMaxCap(uint256 _maxCap) external onlyOwner {
         require(_maxCap != 0, 'max cap cannot be zero');
+        require(invVoteThreshold <= _maxCap * 100, 'invVoteThreshold must be less than maxCap');
         uint256 oldCap = maxCap;
         maxCap = _maxCap;
         emit UpdateMaxCap(oldCap, _maxCap);
@@ -223,7 +224,7 @@ IVeRvrs
     function setInvVoteThreshold(uint256 _invVoteThreshold) external onlyOwner {
         // onwner should set a high value if we do not want to implement an important threshold
         require(_invVoteThreshold != 0, 'invVoteThreshold cannot be zero');
-        require(_invVoteThreshold < maxCap * 100, 'invVoteThreshold must be less than cap');
+        require(_invVoteThreshold <= maxCap * 100, 'invVoteThreshold must be less than maxCap');
         uint256 oldInvVoteThreshold = invVoteThreshold;
         invVoteThreshold = _invVoteThreshold;
         emit UpdateInvVoteThreshold(oldInvVoteThreshold, _invVoteThreshold);
