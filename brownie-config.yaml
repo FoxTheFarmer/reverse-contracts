@@ -1,7 +1,7 @@
 project_structure:
     build: build
     contracts: contracts
-    interfaces: interfaces
+    interfaces: contracts/interfaces
 
 networks:
     default: one-main # development

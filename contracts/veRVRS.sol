@@ -362,6 +362,9 @@ IVeRvrs
     /// @param _user the address of the user
     function pendingRewards(address _user) external view returns (uint256) {
         UserInfo storage user = userInfo[_user];
+        if (user.amount == 0) {
+            return 0;
+        }
         uint256 pending = user.amount.mul(accRewardPerShareNow()).div(ACC_REWARD_PRECISION).sub(user.rewardDebt);
         pending += balanceOf(_user).mul(accRewardPerVeShareNow()).div(ACC_REWARD_PRECISION).sub(user.rewardDebtVeRvrs);
         return pending;
