@@ -7,7 +7,7 @@ import '@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol';
 import '@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol';
 import '@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol';
 import '@openzeppelin/contracts/utils/math/SafeMath.sol';
-import './VeERC20Upgradeable.sol';
+import './veERC20Upgradeable.sol';
 import './interfaces/IMasterchef.sol';
 import './interfaces/IVeRvrs.sol';
 
